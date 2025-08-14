@@ -1,0 +1,243 @@
+<immersive id="interactive\_study\_calendar\_v1" type="code"title="互動式N3備考打卡日曆"\>
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>互動式N3備考打卡日曆</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', 'Noto Sans TC', sans-serif; 
+            background-color: #f8f9fa;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 0.5rem;
+        }
+        .day-cell {
+            position: relative;
+            padding-top: 100%; /* Aspect ratio 1:1 */
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+        }
+        .day-cell:hover {
+            transform: scale(1.05);
+            z-index: 10;
+        }
+        .day-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 0.5rem;
+        }
+        .checked-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(22, 163, 74, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .day-cell.checked .checked-overlay {
+            opacity: 1;
+        }
+        .task-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
+        /* Task Colors */
+        .task-phase1 { background-color: #3b82f6; } /* Blue */
+        .task-phase2 { background-color: #10b981; } /* Green */
+        .task-phase3 { background-color: #f59e0b; } /* Yellow */
+        .task-phase4 { background-color: #ef4444; } /* Red */
+        .task-special { background-color: #8b5cf6; } /* Purple */
+    </style>
+</head>
+<body class="text-gray-800 p-2 sm:p-4">
+    <div class="max-w-4xl mx-auto">
+        <header class="text-center my-6">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900">互動式 N3 備考打卡日曆</h1>
+            <p class="text-gray-500 mt-1">點擊日期即可打卡，為自己的努力蓋上印章！</p>
+        </header>
+
+        <!-- Legend -->
+        <div class="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 mb-6 text-xs sm:text-sm">
+            <div class="flex items-center"><div class="task-dot task-phase1"></div><span>基礎期</span></div>
+            <div class="flex items-center"><div class="task-dot task-phase2"></div><span>整合期</span></div>
+            <div class="flex items-center"><div class="task-dot task-phase3"></div><span>衝刺期</span></div>
+            <div class="flex items-center"><div class="task-dot task-phase4"></div><span>模擬考</span></div>
+            <div class="flex items-center"><div class="task-dot task-special"></div><span>特別任務</span></div>
+        </div>
+
+        <div id="calendar-container" class="space-y-8"></div>
+    </div>
+
+    <script>
+        // --- 設定與資料 ---
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // 標準化今天的日期
+
+        // 定義學習計畫的日期範圍
+        const studyPlan = [
+            { name: "出差前準備", start: new Date('2025-08-14'), end: new Date('2025-08-28'), phase: 1, task: "N4文法 & N5單字" },
+            { name: "日本出差", start: new Date('2025-08-29'), end: new Date('2025-09-02'), phase: 'special', task: "實戰應用" },
+            { name: "基礎鞏固", start: new Date('2025-09-03'), end: new Date('2025-09-21'), phase: 1, task: "N4文法 & N4單字" },
+            { name: "雙軌整合期", start: new Date('2025-09-22'), end: new Date('2025-10-26'), phase: 2, task: "線上課程 & N3單字" },
+            { name: "全力衝刺期", start: new Date('2025-10-27'), end: new Date('2025-11-23'), phase: 3, task: "加速課程 & N3單字" },
+            { name: "模擬考期", start: new Date('2025-11-24'), end: new Date('2025-12-06'), phase: 4, task: "模擬考 & 弱點分析" },
+            { name: "N3考試日", start: new Date('2025-12-07'), end: new Date('2025-12-07'), phase: 'special', task: "平常心應戰！" },
+        ];
+
+        // --- 主要功能 ---
+
+        // 根據日期獲取對應的學習計畫
+        function getPlanForDate(date) {
+            for (const plan of studyPlan) {
+                if (date >= plan.start && date <= plan.end) {
+                    return plan;
+                }
+            }
+            return null; // 不在計畫範圍內
+        }
+
+        // 產生單一月份的日曆
+        function generateMonth(year, month) {
+            const monthContainer = document.createElement('div');
+            monthContainer.className = 'bg-white p-4 rounded-lg shadow-sm';
+            
+            const monthHeader = document.createElement('h2');
+            monthHeader.className = 'text-xl font-bold text-center mb-4';
+            monthHeader.textContent = `${year} 年 ${month + 1} 月`;
+            monthContainer.appendChild(monthHeader);
+
+            const calendarGrid = document.createElement('div');
+            calendarGrid.className = 'calendar-grid';
+
+            const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+            weekDays.forEach(day => {
+                const dayHeader = document.createElement('div');
+                dayHeader.className = 'text-center font-semibold text-gray-500 text-sm';
+                dayHeader.textContent = day;
+                calendarGrid.appendChild(dayHeader);
+            });
+
+            const firstDayOfMonth = new Date(year, month, 1);
+            const startingDay = firstDayOfMonth.getDay(); // 0 for Sunday, 1 for Monday, etc.
+
+            // 填充第一天前的空白
+            for (let i = 0; i < startingDay; i++) {
+                const emptyCell = document.createElement('div');
+                calendarGrid.appendChild(emptyCell);
+            }
+
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            for (let day = 1; day <= daysInMonth; day++) {
+                const currentDate = new Date(year, month, day);
+                const plan = getPlanForDate(currentDate);
+
+                const dayCell = document.createElement('div');
+                dayCell.className = 'day-cell bg-gray-50 rounded-md border';
+
+                if (!plan) {
+                    dayCell.classList.add('bg-gray-200', 'cursor-not-allowed');
+                } else {
+                    dayCell.addEventListener('click', () => toggleCheckIn(currentDate));
+                }
+                
+                const dayContent = document.createElement('div');
+                dayContent.className = 'day-content';
+
+                const dayNumber = document.createElement('span');
+                dayNumber.className = 'text-sm font-semibold';
+                dayNumber.textContent = day;
+                
+                // 標示今天
+                if (currentDate.getTime() === today.getTime()) {
+                    dayNumber.classList.add('bg-yellow-300', 'text-yellow-900', 'rounded-full', 'w-6', 'h-6', 'flex', 'items-center', 'justify-center');
+                }
+
+                const taskContainer = document.createElement('div');
+                if (plan) {
+                    taskContainer.className = 'flex items-center text-xs text-gray-600';
+                    const taskDot = document.createElement('div');
+                    taskDot.className = `task-dot ${plan.phase === 'special' ? 'task-special' : 'task-phase' + plan.phase}`;
+                    taskContainer.appendChild(taskDot);
+                    const taskText = document.createElement('span');
+                    taskText.textContent = plan.task;
+                    taskContainer.appendChild(taskText);
+                }
+
+                dayContent.appendChild(dayNumber);
+                dayContent.appendChild(taskContainer);
+                dayCell.appendChild(dayContent);
+                
+                // 打卡成功後的覆蓋層
+                const checkedOverlay = document.createElement('div');
+                checkedOverlay.className = 'checked-overlay rounded-md';
+                checkedOverlay.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-1/2 w-1/2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>`;
+                dayCell.appendChild(checkedOverlay);
+
+                // 根據 localStorage 設置初始狀態
+                if (localStorage.getItem(`checkin-${currentDate.toISOString().split('T')[0]}`)) {
+                    dayCell.classList.add('checked');
+                }
+
+                calendarGrid.appendChild(dayCell);
+            }
+
+            monthContainer.appendChild(calendarGrid);
+            document.getElementById('calendar-container').appendChild(monthContainer);
+        }
+
+        // 切換打卡狀態
+        function toggleCheckIn(date) {
+            const dateString = date.toISOString().split('T')[0];
+            const key = `checkin-${dateString}`;
+            const dayCell = document.querySelector(`[data-date='${dateString}']`); // 需要一個方法來找到對應的cell
+
+            if (localStorage.getItem(key)) {
+                localStorage.removeItem(key);
+            } else {
+                localStorage.setItem(key, 'done');
+            }
+            // 重新渲染以更新狀態 (簡單起見)
+            renderAllMonths();
+        }
+        
+        // 渲染所有相關月份的日曆
+        function renderAllMonths() {
+            const container = document.getElementById('calendar-container');
+            container.innerHTML = ''; // 清空容器
+            generateMonth(2025, 7); // August
+            generateMonth(2025, 8); // September
+            generateMonth(2025, 9); // October
+            generateMonth(2025, 10); // November
+            generateMonth(2025, 11); // December
+        }
+
+        // 頁面載入時執行
+        document.addEventListener('DOMContentLoaded', renderAllMonths);
+
+    </script>
+</body>
+</html>
+```</immersive>
+````
